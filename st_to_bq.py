@@ -1,7 +1,6 @@
 import json
 import requests
 import pandas as pd
-import google
 from google.cloud import storage, bigquery
 from datetime import datetime
 
@@ -30,7 +29,8 @@ def get_data_secret(version):
 def get_data_credentials(version):
     # Args: Version(str) : Api version
     # 2nd step get credentials from .env file
-    c = get_data_credentials(version)
+    c = get_data_secret(version)
+
     if version == 'v1':
         credendials = {
             "clientId": c['CLIENT_ID_V1_RAIA'],
@@ -104,7 +104,6 @@ def get_url_auth_dotenv(version):
     else:
         return 'version not supported'
 
-
 def get_auth(payload, version):
     # 3rd step
     # Make auth-request
@@ -113,12 +112,12 @@ def get_auth(payload, version):
     return str(authentication)
 
 
-def consume_sfmc(token):
-    url = env['REST_URI_V2_RAIA']
+def consume_sfmc(token, version):
+    rest = get_data_secret(version)
+    url = rest['REST_URI_V2_RAIA']
     url += '/data/v1/customobjectdata/key/IGO_PROFILES/rowset?$pageSize=10'
 
     headers = {'Authorization': token}
-
     response = requests.get(url=url, headers=headers)
     check_status, status = check_status_code(response.status_code)
 
@@ -162,7 +161,7 @@ def save_file_on_bucket(
     filepath: str,
     content_type="text/plain"
 ):
-    print(type(content))
+   
     storage_client = storage.Client(project)
     uri = f"gs://{bucketname}/{filepath}"
 
@@ -184,8 +183,6 @@ def save_file_on_bucket(
 
 
 def create_schema(column_name):
-    length_schema = len(column_name)
-    print(type(column_name))
     schema = []
     types = {
         'int': "INTEGER",
@@ -197,21 +194,45 @@ def create_schema(column_name):
         t = str(type(key).__name__)
         if t in types:
             typ = types[t]
-            print(f"{typ} => {value}")
+            schema.append(bigquery.SchemaField(value, typ))
+    return schema
 
-    return 0
 
 
-'''
 def gcs_to_bq(project, dataset_name, brand, schema, gcs_uri):
 
     print("Inicializando Client .. ")
     bq_client = bigquery.Client(project)
     dataset_ref = bq_client.get_dataset(project + "." + dataset_name)
     table_name = f"{brand}_{datetime.today().strftime('%Y-%m-%d')}"
+    print(f"Reporting  \n {dataset_name} => {table_name}  \n  {schema} \n {gcs_uri}")
+    print("configurando job ... ")
+    job_config = bigquery.LoadJobConfig(
+        schema=schema,
+        skip_leading_rows=1,
+        source_format=bigquery.SourceFormat.CSV,
+        time_partitioning=bigquery.TimePartitioning(
+            type_=bigquery.TimePartitioningType.DAY,
+            field="extraction_date",
+        ),
+        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE
+    )
+
+    load_job = bq_client.load_table_from_uri(
+        gcs_uri, dataset_ref.table(table_name), job_config=job_config
+    )
+
+    print("Executando job {}...".format(load_job.job_id))
+    load_job.result()  # Waits for table load to complete.
+
+    destination_table = bq_client.get_table(dataset_ref.table(table_name))
+    print(f"[{table_name}] Sucesso no carregamento da tabela!")
+
+
+
     
     return 'aa'
-'''
+
 
 if __name__ == '__main__':
     # API Version V2 uses OAuth2.0
@@ -222,7 +243,7 @@ if __name__ == '__main__':
     # Authenticate with SFMC API
     t = get_auth(p, v)
     # Consume the API using the endpoints of SFMC docs
-    em = consume_sfmc(t)
+    em = consume_sfmc(t, v)
     # Gather data retreived from API
     user_data = em['items']
     # Data Wrangling  = Packing, Unpacking data for transfromation
@@ -241,5 +262,4 @@ if __name__ == '__main__':
     }
     uri = csv_to_gcs(df, brand, config)
     schema = create_schema(lst[0])
-
-    # gcs_to_bq(config["project"], "raia_adsync", schema, uri)
+    gcs_to_bq(config["project"], "data_adsync", brand, schema, uri)

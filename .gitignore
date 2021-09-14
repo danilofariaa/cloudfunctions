@@ -1,6 +1,4 @@
 *.csv
-*.txt
-venv/
 venv
-.env
-settings.py
+.vscode
+*.txt

@@ -1,5 +1,6 @@
 import json
 import requests
+import re
 import pandas as pd
 from google.cloud import storage, bigquery
 from datetime import datetime
@@ -130,10 +131,15 @@ def consume_sfmc(token, version):
 
 def unpack_data(dict):
     d = {}
+
     for key, value in dict.items():
         for k, v in value.items():
             if bool(v):
-                d[k] = v
+                
+                if k == 'user_id':
+                    d[k] ='_'+re.sub(r"(-)","_", v)
+                else:
+                    d[k] = v.replace(" ","_")
             else:
                 value.pop('k', None)
     return d
@@ -143,6 +149,7 @@ def create_dataframe(data):
     df = pd.DataFrame(
         data, columns=['user_id', 'email', 'city', 'region', 'country'])
     df.fillna("NULL", inplace=True)
+
     return df
 
 
@@ -182,7 +189,7 @@ def save_file_on_bucket(
     return uri
 
 
-def create_schema(column_name):
+def create_schema(lst):
     schema = []
     types = {
         'int': "INTEGER",
@@ -190,11 +197,12 @@ def create_schema(column_name):
         'bool': "BOOLEAN",
         'str': "STRING"
     }
-    for key, value in column_name.items():
+    for key, value in lst.items():
         t = str(type(key).__name__)
         if t in types:
             typ = types[t]
-            schema.append(bigquery.SchemaField(value, typ))
+            schema.append(bigquery.SchemaField(key, typ))
+  
     return schema
 
 
@@ -211,10 +219,6 @@ def gcs_to_bq(project, dataset_name, brand, schema, gcs_uri):
         schema=schema,
         skip_leading_rows=1,
         source_format=bigquery.SourceFormat.CSV,
-        time_partitioning=bigquery.TimePartitioning(
-            type_=bigquery.TimePartitioningType.DAY,
-            field="extraction_date",
-        ),
         write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE
     )
 
@@ -228,10 +232,6 @@ def gcs_to_bq(project, dataset_name, brand, schema, gcs_uri):
     destination_table = bq_client.get_table(dataset_ref.table(table_name))
     print(f"[{table_name}] Sucesso no carregamento da tabela!")
 
-
-
-    
-    return 'aa'
 
 
 if __name__ == '__main__':
@@ -254,12 +254,13 @@ if __name__ == '__main__':
 
     # Create dataframe
     df = create_dataframe(lst)
-
     # gcs to bq
     config = {
         'project': "raiadrogasil-280519",
         'bucketname': "drogaraia_adsync"
     }
     uri = csv_to_gcs(df, brand, config)
+   
     schema = create_schema(lst[0])
+    
     gcs_to_bq(config["project"], "data_adsync", brand, schema, uri)

@@ -7,24 +7,24 @@ from datetime import datetime
 
 
 def get_data_secret(version):
-    if version == 'v1':
+    if version == "v1":
         credentals = {
-            'AUTH_URI_V1_RAIA': 'https://mcjss9736km3nd134n6cv8-hcfy0.auth.marketingcloudapis.com/v1/requestToken',
-            'REST_URI_V1_RAIA': 'https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/',
-            'CLIENT_ID_V1_RAIA': 'o09bav0efhzkub1fjtngg2kf',
-            'CLIENT_SECRET_V1_RAIA': 'QiWxOZR0fPB3yeJUbBQMxE6G'
+            "AUTH_URI_V1_RAIA": "https://mcjss9736km3nd134n6cv8-hcfy0.auth.marketingcloudapis.com/v1/requestToken",
+            "REST_URI_V1_RAIA": "https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/",
+            "CLIENT_ID_V1_RAIA": "o09bav0efhzkub1fjtngg2kf",
+            "CLIENT_SECRET_V1_RAIA": "QiWxOZR0fPB3yeJUbBQMxE6G",
         }
         return credentals
-    elif version == 'v2':
+    elif version == "v2":
         credentals = {
-            'AUTH_URI_V2_RAIA': 'https://mcjss9736km3nd134n6cv8-hcfy0.auth.marketingcloudapis.com/v2/token',
-            'REST_URI_V2_RAIA': 'https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/',
-            'CLIENT_ID_V2_RAIA': 'o09bav0efhzkub1fjtngg2kf',
-            'CLIENT_SECRET_V2_RAIA': 'QiWxOZR0fPB3yeJUbBQMxE6G'
+            "AUTH_URI_V2_RAIA": "https://mcjss9736km3nd134n6cv8-hcfy0.auth.marketingcloudapis.com/v2/token",
+            "REST_URI_V2_RAIA": "https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/",
+            "CLIENT_ID_V2_RAIA": "o09bav0efhzkub1fjtngg2kf",
+            "CLIENT_SECRET_V2_RAIA": "QiWxOZR0fPB3yeJUbBQMxE6G",
         }
         return credentals
     else:
-        return 'version not supported'
+        return "version not supported"
 
 
 def get_data_credentials(version):
@@ -32,21 +32,21 @@ def get_data_credentials(version):
     # 2nd step get credentials from .env file
     c = get_data_secret(version)
 
-    if version == 'v1':
+    if version == "v1":
         credendials = {
-            "clientId": c['CLIENT_ID_V1_RAIA'],
-            "clientSecret": c['CLIENT_SECRET_V1_RAIA']
+            "clientId": c["CLIENT_ID_V1_RAIA"],
+            "clientSecret": c["CLIENT_SECRET_V1_RAIA"],
         }
         return credendials
-    elif version == 'v2':
+    elif version == "v2":
         credendials = {
-            'client_id': c['CLIENT_ID_V2_RAIA'],
-            'client_secret': c['CLIENT_SECRET_V2_RAIA'],
-            'grant_type': 'client_credentials'
+            "client_id": c["CLIENT_ID_V2_RAIA"],
+            "client_secret": c["CLIENT_SECRET_V2_RAIA"],
+            "grant_type": "client_credentials",
         }
         return credendials
     else:
-        return 'version not supported'
+        return "version not supported"
 
 
 def get_credendials(version):
@@ -61,13 +61,13 @@ def check_status_code(status):
     # check status code (can be called multiple times)
 
     if status >= 200 and status <= 299:
-        return 'success', status
+        return "success", status
     elif status >= 300 and status <= 399:
-        return 'redirect', status
+        return "redirect", status
     elif status >= 400 and status <= 499:
-        return 'error_client', status
+        return "error_client", status
     elif status >= 500 and status <= 599:
-        return 'error_server', status
+        return "error_server", status
 
 
 def response_data(url, payload):
@@ -81,32 +81,35 @@ def response_data(url, payload):
     response = requests.post(url=url, data=payload)
     check_status, status = check_status_code(response.status_code)
     body = json.loads(response.content)
-    if check_status == 'success':
+    if check_status == "success":
         auth_response = {
-            "token": body['access_token'],
-            "token_type": body['token_type'],
-            "expiration": body['expires_in']
+            "token": body["access_token"],
+            "token_type": body["token_type"],
+            "expiration": body["expires_in"],
         }
-        return str(auth_response['token_type'])+' '+str(auth_response['token'])
+        return str(auth_response["token_type"]) + " " + str(auth_response["token"])
     else:
         return status
 
 
 def get_url_auth_dotenv(version):
     # Args: Version(str) : Api version
-    # 4th step get url auth from .env file
+    # Get url auth from .env file
     auth = get_data_secret(version)
-    if version == 'v1':
-        url = auth['AUTH_URI_V1_RAIA']
+    if version == "v1":
+        url = auth["AUTH_URI_V1_RAIA"]
         return url
-    elif version == 'v2':
-        url = auth['AUTH_URI_V2_RAIA']
+    elif version == "v2":
+        url = auth["AUTH_URI_V2_RAIA"]
         return url
     else:
-        return 'version not supported'
+        return "version not supported"
+
 
 def get_auth(payload, version):
-    # 3rd step
+    # Args:
+    # Payload: Authentication data
+    # API Version: Version API
     # Make auth-request
     url = get_url_auth_dotenv(version)
     authentication = response_data(url, payload)
@@ -114,50 +117,77 @@ def get_auth(payload, version):
 
 
 def consume_sfmc(token, version):
+    # Args
+    # Url : Url of request,
+    # Payload: data of request
+
+    # Make request from api versioned (can be called multiple times)
+    # Return a dic with:
+    # Access token, Token type, and Expiration time
     rest = get_data_secret(version)
-    url = rest['REST_URI_V2_RAIA']
-    url += '/data/v1/customobjectdata/key/IGO_PROFILES/rowset?$pageSize=10'
+    # url = rest["REST_URI_V2_RAIA"]
+    # url += "data/v1/customobjectdata/key/IGO_PROFILES/rowset?$pageSize=10"
+    tst = []
+    for i in range(1, 50):
+        url = f"https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/data/v1/customobjectdata/key/4B16816C-B017-418C-9378-C4B0A28B0ED3/rowset?$pageSize=2500&$page={str(i)}"
+        headers = {"Authorization": token}
+        response = requests.get(url=url, headers=headers)
+        check_status, status = check_status_code(response.status_code)
+        if check_status == "success":
+            tst.append(response.content)
+    return tst
 
-    headers = {'Authorization': token}
-    response = requests.get(url=url, headers=headers)
-    check_status, status = check_status_code(response.status_code)
 
-    if check_status == 'success':
-        body = json.loads(response.content)
-        return body
-    else:
-        return status
-
-
-def unpack_data(dict):
-    d = {}
-
-    for key, value in dict.items():
-        for k, v in value.items():
-            if bool(v):
-                
-                if k == 'user_id':
-                    d[k] ='_'+re.sub(r"(-)","_", v)
-                else:
-                    d[k] = v.replace(" ","_")
-            else:
-                value.pop('k', None)
-    return d
+def unpack(list):
+    lst = []
+    for item in list:
+        for key, value in item.items():
+            if key == "items":
+                lst.append(value)
+    return lst
 
 
 def create_dataframe(data):
+    # Args
+    # data : dict with SFMC
+    # Create pandas dataframe and fill NaN values
     df = pd.DataFrame(
-        data, columns=['user_id', 'email', 'city', 'region', 'country'])
+        data,
+        columns=[
+            "golden_id",
+            "nome",
+            "sobrenome",
+            "email",
+            "tel_celular",
+            "tel_fixo_res",
+            "cliente_raia",
+            "cliente_drogasil",
+            "cliente_univers",
+            "possui_app",
+            "optout_email",
+            "optout_sms",
+            "optout_midias",
+            "possui_app_raia",
+            "possui_app_drogasil",
+            "bandeira_pref",
+        ],
+    )
     df.fillna("NULL", inplace=True)
 
     return df
 
 
 def csv_to_gcs(dataframe, brand: str, config):
-    date = datetime.today().strftime('%Y-%m-%d')
+    # Args
+    # dataframe : dict with SFMC
+    # brand : Raia or Drogasil
+    # config : Project initial configs such as (project, bucketname)
+    # Save file on GCS bucket (adsync)
+    date = datetime.today().strftime("%Y-%m-%d")
     filepath = f"{brand}_pii_{date}.csv"
     uri = save_file_on_bucket(
-        dataframe.to_csv(index=False), config['project'], config['bucketname'], filepath)
+        dataframe.to_csv(index=False), config["project"], config["bucketname"], filepath
+    )
     return uri
 
 
@@ -166,9 +196,12 @@ def save_file_on_bucket(
     project: str,
     bucketname: str,
     filepath: str,
-    content_type="text/plain"
+    content_type="text/plain",
 ):
-   
+    # Args
+    # data : dict with SFMC
+    # Create pandas dataframe and fill NaN values
+
     storage_client = storage.Client(project)
     uri = f"gs://{bucketname}/{filepath}"
 
@@ -178,10 +211,7 @@ def save_file_on_bucket(
         bucket = storage_client.bucket(bucketname)
         blob = bucket.blob(filepath)
     except google.cloud.exceptions.NotFound:
-        print(
-            f"[ERROR] Storage Failure. "
-            f"Bucket gs://{bucketname} not Found."
-        )
+        print(f"[ERROR] Storage Failure. " f"Bucket gs://{bucketname} not Found.")
         return
 
     blob.upload_from_string(content, content_type=content_type)
@@ -189,22 +219,18 @@ def save_file_on_bucket(
     return uri
 
 
-def create_schema(lst):
+def create_schema(df):
+    # Create schema for BQ Table
+    lst = df.columns.tolist()
     schema = []
-    types = {
-        'int': "INTEGER",
-        'float': "FLOAT",
-        'bool': "BOOLEAN",
-        'str': "STRING"
-    }
-    for key, value in lst.items():
+    types = {"int": "INTEGER", "float": "FLOAT", "bool": "BOOLEAN", "str": "STRING"}
+    for key in lst:
         t = str(type(key).__name__)
         if t in types:
             typ = types[t]
             schema.append(bigquery.SchemaField(key, typ))
-  
-    return schema
 
+    return schema
 
 
 def gcs_to_bq(project, dataset_name, brand, schema, gcs_uri):
@@ -219,7 +245,7 @@ def gcs_to_bq(project, dataset_name, brand, schema, gcs_uri):
         schema=schema,
         skip_leading_rows=1,
         source_format=bigquery.SourceFormat.CSV,
-        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE
+        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
     )
 
     load_job = bq_client.load_table_from_uri(
@@ -233,34 +259,38 @@ def gcs_to_bq(project, dataset_name, brand, schema, gcs_uri):
     print(f"[{table_name}] Sucesso no carregamento da tabela!")
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     # API Version V2 uses OAuth2.0
-    v = 'v2'
-    brand = 'raia'
+    v = "v2"
+    brand = "raia"
     # Get environments credencials for consume API
     p = get_credendials(v)
+
     # Authenticate with SFMC API
     t = get_auth(p, v)
     # Consume the API using the endpoints of SFMC docs
+
     em = consume_sfmc(t, v)
-    # Gather data retreived from API
-    user_data = em['items']
-    # Data Wrangling  = Packing, Unpacking data for transfromation
+    # print(em)
+
+    data_list = [json.loads(x.decode("utf-8")) for x in em]
+    u_list = unpack(data_list)
     lst = []
-    for u in user_data:
-        unpacked = unpack_data(u)
-        lst.append(unpacked)
+    for i in u_list:
+        for j in i:
+            a = {**j["keys"], **j["values"]}
+            lst.append(a)
 
     # Create dataframe
     df = create_dataframe(lst)
-    # gcs to bq
-    config = {
-        'project': "raiadrogasil-280519",
-        'bucketname': "drogaraia_adsync"
-    }
+    # print(df)
+
+    # Set config for project
+    config = {"project": "raiadrogasil-280519", "bucketname": "drogaraia_adsync"}
+    # Uri for save csv file into BQ
     uri = csv_to_gcs(df, brand, config)
-   
-    schema = create_schema(lst[0])
-    
+    # Collect Schema from packed data
+    schema = create_schema(df)
+
+    # Save GCS csv file into BQ
     gcs_to_bq(config["project"], "data_adsync", brand, schema, uri)

@@ -283,7 +283,7 @@ if __name__ == "__main__":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     loop = asyncio.ProactorEventLoop()
     asyncio.set_event_loop(loop)
-    dados_piis = run(consume_sfmc(1, 499, t))
+    dados_piis = run(consume_sfmc(1, 200, t))
     end_consume_sfmc = time.time() - start_consume_sfmc
     print(f" SFMC Excution Time: {end_consume_sfmc}")
 

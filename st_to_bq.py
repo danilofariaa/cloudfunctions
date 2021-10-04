@@ -1,6 +1,9 @@
 import json
 import requests
-import re
+import time
+import asyncio
+from asyncio import gather, run
+from httpx import AsyncClient
 import pandas as pd
 from google.cloud import storage, bigquery
 from datetime import datetime
@@ -116,26 +119,19 @@ def get_auth(payload, version):
     return str(authentication)
 
 
-def consume_sfmc(token, version):
-    # Args
-    # Url : Url of request,
-    # Payload: data of request
+async def download(number, token):
+    url = "https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/data/v1/customobjectdata/key/4B16816C-B017-418C-9378-C4B0A28B0ED3/rowset?$pageSize=2500&$page={number}"
+    headers = {"Authorization": token}
+    async with AsyncClient() as client:
+        response = await client.get(
+            url.format(number=number), headers=headers, timeout=None
+        )
+        print(number)
+        return response
 
-    # Make request from api versioned (can be called multiple times)
-    # Return a dic with:
-    # Access token, Token type, and Expiration time
-    rest = get_data_secret(version)
-    # url = rest["REST_URI_V2_RAIA"]
-    # url += "data/v1/customobjectdata/key/IGO_PROFILES/rowset?$pageSize=10"
-    tst = []
-    for i in range(1, 50):
-        url = f"https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/data/v1/customobjectdata/key/4B16816C-B017-418C-9378-C4B0A28B0ED3/rowset?$pageSize=2500&$page={str(i)}"
-        headers = {"Authorization": token}
-        response = requests.get(url=url, headers=headers)
-        check_status, status = check_status_code(response.status_code)
-        if check_status == "success":
-            tst.append(response.content)
-    return tst
+
+async def consume_sfmc(start, stop, token):
+    return await gather(*[download(number, token) for number in range(start, stop)])
 
 
 def unpack(list):
@@ -175,6 +171,11 @@ def create_dataframe(data):
     df.fillna("NULL", inplace=True)
 
     return df
+
+
+def get_data_list(em):
+    dl = [json.loads(x.decode("utf-8")) for x in em]
+    return dl
 
 
 def csv_to_gcs(dataframe, brand: str, config):
@@ -259,38 +260,48 @@ def gcs_to_bq(project, dataset_name, brand, schema, gcs_uri):
     print(f"[{table_name}] Sucesso no carregamento da tabela!")
 
 
+def clean_pii(dados_pii):
+    lst = []
+    for d in dados_pii:
+        body = json.loads(d.content)
+        for key, value in body.items():
+            if key == "items":
+                lst.append(value)
+    return lst
+
+
 if __name__ == "__main__":
     # API Version V2 uses OAuth2.0
     v = "v2"
     brand = "raia"
     # Get environments credencials for consume API
     p = get_credendials(v)
-
     # Authenticate with SFMC API
     t = get_auth(p, v)
     # Consume the API using the endpoints of SFMC docs
+    start_consume_sfmc = time.time()
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    loop = asyncio.ProactorEventLoop()
+    asyncio.set_event_loop(loop)
+    dados_piis = run(consume_sfmc(1, 499, t))
+    end_consume_sfmc = time.time() - start_consume_sfmc
+    print(f" SFMC Excution Time: {end_consume_sfmc}")
 
-    em = consume_sfmc(t, v)
-    # print(em)
-
-    data_list = [json.loads(x.decode("utf-8")) for x in em]
-    u_list = unpack(data_list)
+    d = clean_pii(dados_piis)
     lst = []
-    for i in u_list:
+    for i in d:
         for j in i:
             a = {**j["keys"], **j["values"]}
             lst.append(a)
 
     # Create dataframe
     df = create_dataframe(lst)
-    # print(df)
-
+    print(df)
     # Set config for project
     config = {"project": "raiadrogasil-280519", "bucketname": "drogaraia_adsync"}
     # Uri for save csv file into BQ
     uri = csv_to_gcs(df, brand, config)
     # Collect Schema from packed data
     schema = create_schema(df)
-
     # Save GCS csv file into BQ
     gcs_to_bq(config["project"], "data_adsync", brand, schema, uri)

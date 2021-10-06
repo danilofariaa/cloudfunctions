@@ -15,12 +15,24 @@ from requests.exceptions import Timeout
 
 
 def get_data_secret(version):
+<<<<<<< HEAD
     if version == "v2":
+=======
+    if version == "v1":
+        credentals = {
+            "AUTH_URI_V1_RAIA": "https://mcjss9736km3nd134n6cv8-hcfy0.auth.marketingcloudapis.com/v1/requestToken",
+            "REST_URI_V1_RAIA": "https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/",
+            "CLIENT_ID_V1_RAIA": "",
+            "CLIENT_SECRET_V1_RAIA": "",
+        }
+        return credentals
+    elif version == "v2":
+>>>>>>> 0ae244c41699fef00a0dc3a563389520cdb0879e
         credentals = {
             "AUTH_URI_V2_RAIA": "https://mcjss9736km3nd134n6cv8-hcfy0.auth.marketingcloudapis.com/v2/token",
             "REST_URI_V2_RAIA": "https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/",
-            "CLIENT_ID_V2_RAIA": "o09bav0efhzkub1fjtngg2kf",
-            "CLIENT_SECRET_V2_RAIA": "QiWxOZR0fPB3yeJUbBQMxE6G",
+            "CLIENT_ID_V2_RAIA": "",
+            "CLIENT_SECRET_V2_RAIA": "",
         }
         return credentals
     else:

@@ -110,64 +110,6 @@ def get_auth(payload, version):
     return str(authentication)
 
 
-async def download(session, url, token, number):
-    """
-    Task para realizar requisicao assincrona
-    Args =  number : numero da iteracao
-            token: token para autenticacao com api
-            externalkey: chave para acesso a dataextension
-    """
-    headers = {"Authorization": token}
-    cont = 0
-    while True:
-
-        try:
-            async with session.get(url=url, headers=headers, timeout=None) as resp:
-                print(f"Response : {number} ")
-                data = await resp.json()
-                cont += 1
-                return data
-
-        except (
-            aiohttp.ClientConnectionError,
-            aiohttp.ServerDisconnectedError,
-            asyncio.IncompleteReadError,
-        ) as s:
-            print(s)
-
-
-async def consume_sfmc(start, stop, token, externalkey):
-    """
-    A API possui uma restrição de 2500 registros por requisicao, dessa forma implementamos um loop para iterar sob o total de registros solicitado,
-    dado pelo total de registros / 2500
-    Args = start: range inicial para o consumo da api
-           stop : range final para o consumo da api
-           token : token de autenticacao sfmc
-           externalkey : external key vinda da data extensions SFMC
-    """
-    print("Consumindo dados")
-    connector = aiohttp.TCPConnector(limit=1)
-    async with aiohttp.ClientSession() as session:
-        tasks = []
-        for number in range(start, stop):
-            print(f"Request number : {number}")
-            url = "https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/data/v1/customobjectdata/key/{externalkey}/rowset?$pageSize=1&$page={number}"
-            tasks.append(
-                asyncio.ensure_future(
-                    download(
-                        session,
-                        url.format(externalkey=externalkey, number=number),
-                        token,
-                        number,
-                    )
-                )
-            )
-            await asyncio.sleep(1)
-
-        pii_data = await asyncio.gather(*tasks)
-        return pii_data
-
-
 def unpack(list):
     """
     Desempacota os dados piis vindos da requisicao
@@ -181,7 +123,7 @@ def unpack(list):
     return lst
 
 
-def create_dataframe(data, de_key, de_fields):
+async def create_dataframe(data, de_key, de_fields):
     # Args
     # data : dict com os dados piis vindos da SFMC
     # Cria um dataframe e preenche dados NaN como NULL
@@ -191,15 +133,15 @@ def create_dataframe(data, de_key, de_fields):
     return df
 
 
-def csv_to_gcs(dataframe, data_extension: str, config):
+async def csv_to_gcs(dataframe, data_extension: str, config, round):
     # Args
     # dataframe : dict with SFMC
     # brand : Raia or Drogasil
     # config : Project initial configs such as (project, bucketname)
     # Save file on GCS bucket (adsync)
     date = datetime.today().strftime("%Y-%m-%d")
-    filepath = f"{data_extension}_pii_{date}.csv"
-    uri = save_file_on_bucket(
+    filepath = f"{data_extension}_pii_{date}_{round}.csv"
+    uri = await save_file_on_bucket(
         dataframe.to_csv(index=False),
         config["project"],
         config["bucketname"][0],
@@ -208,7 +150,7 @@ def csv_to_gcs(dataframe, data_extension: str, config):
     return uri
 
 
-def save_file_on_bucket(
+async def save_file_on_bucket(
     content: bytes,
     project: str,
     bucketname: list,
@@ -241,7 +183,7 @@ def save_file_on_bucket(
     return uri
 
 
-def create_schema(df):
+async def create_schema(df):
     # Cria schema para uma tabela do BQ
     # Args = df: Dataframe pandas criado para os dados piis
     lst = df.columns.tolist()
@@ -256,7 +198,7 @@ def create_schema(df):
     return schema
 
 
-def gcs_to_bq(project, dataset_name, data_extension, schema, gcs_uri):
+async def gcs_to_bq(project, dataset_name, data_extension, schema, gcs_uri):
     """
     Salva o arquivo csv com dados piis no Big Query
     Args: project
@@ -275,7 +217,7 @@ def gcs_to_bq(project, dataset_name, data_extension, schema, gcs_uri):
         schema=schema,
         skip_leading_rows=1,
         source_format=bigquery.SourceFormat.CSV,
-        write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
+        write_disposition=bigquery.WriteDisposition.WRITE_APPEND,
     )
 
     load_job = bq_client.load_table_from_uri(
@@ -289,7 +231,7 @@ def gcs_to_bq(project, dataset_name, data_extension, schema, gcs_uri):
     print(f"[{table_name}] Sucesso no carregamento da tabela!")
 
 
-def clean_pii(dados_pii):
+async def clean_pii(dados_pii):
     """
     Para cada requisicao, pega apenas os dados da chave items vindas da request
     Args =  dados_pii: lista de requests
@@ -297,19 +239,20 @@ def clean_pii(dados_pii):
     lst = []
     count = 0
     for d in dados_pii:
-        # body = json.loads(d.content)
-        for key, value in d.items():
-            if key == "items":
-                count += 1
-                lst.append(value)
-            else:
-                continue
+        for i in d:
+            if i != None:
+                for key, value in i.items():
+                    if key == "items":
+                        count += 1
+                        lst.append(value)
+                    else:
+                        continue
 
     print(f"total de items {count}")
     return lst
 
 
-def merge_pii(dp_clean):
+async def merge_pii(dp_clean):
     """
     Lista com dicionarios com todas as informacoes completas juntas
     Args : Dicionario com dados piis tratados
@@ -336,6 +279,97 @@ def extract_keys(data_extension):
     return lst
 
 
+async def none_check_list(list):
+    lst = []
+    for val in list:
+        if val != None:
+            lst.append(val)
+    return lst
+
+
+async def get_pii(session, url, token, number):  # retorna 1 pokemon
+
+    cont = 0
+    headers = {"Authorization": token}
+    try:
+        async with session.get(url=url, headers=headers, timeout=None) as resp:
+            print(f"Response : {number} ")
+            data = await resp.json()
+            cont += 1
+            return data
+    except (
+        aiohttp.ClientConnectionError,
+        aiohttp.ClientPayloadError,
+        aiohttp.ServerDisconnectedError,
+        asyncio.IncompleteReadError,
+    ) as s:
+        print(s)
+
+
+async def get_piis(
+    start, stop, token, externalkey
+):  # task para retornar 2,5M de registros
+    tasks = []
+    async with aiohttp.ClientSession() as session:
+        print(f"Collecting 750k of Piis data ")
+        for number in range(start, stop):
+            print(f"Request number : {number}")
+            url = "https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/data/v1/customobjectdata/key/{externalkey}/rowset?$pageSize=2500&$page={number}"
+            tasks.append(
+                asyncio.ensure_future(
+                    get_pii(
+                        session,
+                        url.format(externalkey=externalkey, number=number),
+                        token,
+                        number,
+                    )
+                )
+            )
+            await asyncio.sleep(0.2)
+        piis_data = await asyncio.gather(*tasks)
+        lst = []
+        lst.append(piis_data)
+    return lst
+
+
+async def preparation(
+    max_round, token, externalkey, data_extension_keys, data_extension_fields, config
+):  # task para retornar 22 x 2,5M registros
+    round = 1
+    start = 1
+
+    stop_steps = [8, 16, 24, 32, 40, 48, 56, 64, 72]
+    while round < max_round:
+        if round in stop_steps:
+            print("Time get some new token ... ")
+            # Busca as credenciais para autenticar na API
+            credentials = get_credendials(cfg_initial["version"])
+            # Autenticação na SFMC API
+            token = get_auth(credentials, cfg_initial["version"])
+
+            print("waiting 2 secs")
+            await asyncio.sleep(2)
+
+        stop = (round * 300) + 1
+        print(f"Calling {round} Round")
+        res = await get_piis(start, stop, token, externalkey)
+        none_check = await none_check_list(res)
+        dp_clean = await clean_pii(none_check)
+        merged_data = await merge_pii(dp_clean)
+        df = await create_dataframe(
+            merged_data, data_extension_keys, data_extension_fields
+        )
+        print(df)
+        uri = await csv_to_gcs(df, data_extension_keys, config, round)
+        schema = await create_schema(df)
+        await gcs_to_bq(
+            config["project"], "data_adsync", data_extension_keys, schema, uri
+        )
+
+        start = stop
+        round += 1
+
+
 if __name__ == "__main__":
     # API Version V2 uses OAuth2.0
     # Dicionario de dados com configurações iniciais : Versão API, Bandeira
@@ -343,8 +377,9 @@ if __name__ == "__main__":
     cfg_initial = {
         "version": "v2",
         "brand": ["raia", "drogasil"],
-        "start_request_consume_sfmc": 1,
-        "finish_request_consume_sfmc": 5001,  # 23541
+        # "start_request_consume_sfmc": 1,
+        # "finish_request_consume_sfmc": 101,  # 23541
+        "round_max": 76,
     }
 
     # Dicionario com as data extensions e external keys
@@ -406,6 +441,11 @@ if __name__ == "__main__":
             "perfil_beleza",
         ],
     }
+    # Dicionario de configuração para inserir arquivos CSV no GCS
+    config = {
+        "project": "raiadrogasil-280519",
+        "bucketname": ["drogaraia_adsync", "drogasil_adsync"],
+    }
 
     data_extension_keys = extract_keys(data_extension)
 
@@ -420,39 +460,16 @@ if __name__ == "__main__":
         asyncio.WindowsSelectorEventLoopPolicy()
     )  # Police para Windows
     dados_piis = run(
-        consume_sfmc(
-            cfg_initial["start_request_consume_sfmc"],
-            cfg_initial["finish_request_consume_sfmc"],
+        preparation(
+            # cfg_initial["start_request_consume_sfmc"],
+            cfg_initial["round_max"],
             auth,
             data_extension["MCV_CAD_CLIENTE"],
+            data_extension_keys[2],
+            data_extension_fields,
+            config,
         )
     )
 
     end_consume_sfmc = time.time() - start_consume_sfmc
     print(f" SFMC Excution Time: {end_consume_sfmc}")
-
-    # Desempacotamento/Tratamento dos dados vindos do consumo da SFMC API
-
-    dp_clean = clean_pii(dados_piis)
-
-    # Merging de dados vindos do processo de desempacotamento para transformar multiplos dicionarios com dados piis em um
-    merged_data = merge_pii(dp_clean)
-
-    # Transformação de dicionario de dados para dataframe
-    df = create_dataframe(merged_data, data_extension_keys[2], data_extension_fields)
-    print(df)
-
-    # Dicionario de configuração para inserir arquivos CSV no GCS
-    config = {
-        "project": "raiadrogasil-280519",
-        "bucketname": ["drogaraia_adsync", "drogasil_adsync"],
-    }
-
-    # Inserção do arquivo CSV (com dados piis) no GCS
-    uri = csv_to_gcs(df, data_extension_keys[2], config)
-
-    # Cria o schema das colunas do dataframe. Será passado como parametro na construção da tabela no BQ
-    schema = create_schema(df)
-
-    # Salva os dados Piis no BQ
-    gcs_to_bq(config["project"], "data_adsync", data_extension_keys[2], schema, uri)

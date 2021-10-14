@@ -379,7 +379,7 @@ if __name__ == "__main__":
         "brand": ["raia", "drogasil"],
         # "start_request_consume_sfmc": 1,
         # "finish_request_consume_sfmc": 101,  # 23541
-        "round_max": 76,
+        "round_max": 59,
     }
 
     # Dicionario com as data extensions e external keys
@@ -464,8 +464,8 @@ if __name__ == "__main__":
             # cfg_initial["start_request_consume_sfmc"],
             cfg_initial["round_max"],
             auth,
-            data_extension["MCV_CAD_CLIENTE"],
-            data_extension_keys[2],
+            data_extension["MCV_DNA"],
+            data_extension_keys[3],
             data_extension_fields,
             config,
         )

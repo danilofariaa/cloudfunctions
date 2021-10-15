@@ -6,8 +6,6 @@ import pandas as pd
 import google
 import aiohttp
 from asyncio import gather, run
-
-
 from google.cloud import storage, bigquery
 from datetime import datetime
 
@@ -15,6 +13,9 @@ from requests.exceptions import Timeout
 
 
 def get_data_secret(version):
+    # Coleta Informacoes de credenciais para SFMC
+    # Args:
+    # Version : Versão da api do SFMC = atual v2
     if version == "v2":
         credentals = {
             "AUTH_URI_V2_RAIA": "https://mcjss9736km3nd134n6cv8-hcfy0.auth.marketingcloudapis.com/v2/token",
@@ -28,8 +29,10 @@ def get_data_secret(version):
 
 
 def get_data_credentials(version):
-    # Args: Version(str) : Api version
-    # 2 Passo : Coletar as informacoes de data secret, como endpoint para autenticacao,consumo bem como client e client secret
+    # Coleta as informacoes de data secret, como endpoint para autenticacao,consumo bem como client e client secret
+    # Args:
+    # Version(str) : Versão da API do SFMC
+
     c = get_data_secret(version)
     if version == "v2":
         credendials = {
@@ -43,15 +46,17 @@ def get_data_credentials(version):
 
 
 def get_credendials(version):
-    # Args: Version(str) : Api version
-    # 1 Passo : Pegar as credenciais do usuario para logar na API
+    # Pega as credenciais do usuario para logar na API do SFMC
+    # Args:
+    # Version(str) : Versão da API do SFMC
     credentials = get_data_credentials(version)
     return credentials
 
 
 def check_status_code(status):
-    # Args: status : Status code of a request
-    # check status code (can be called multiple times)
+    # Verifica o status code de uma request (pode ser chamada mais de uma vez)
+    # Args:
+    # status : Status code of a request
 
     if status >= 200 and status <= 299:
         return "success", status
@@ -64,13 +69,12 @@ def check_status_code(status):
 
 
 def response_data(url, payload):
-    # Args
-    # Url : Url of request,
-    # Payload: data of request
+    # Faz uma requisicao para API do SFMC para atuenticacao
+    # Retorna um dic com Token, Tipo do Token, e Tempo de expiracao
+    # Args:
+    # Url : Url da Request,
+    # Payload: Dados da Request
 
-    # Make request from api versioned (can be called multiple times)
-    # Return a dic with:
-    # Access token, Token type, and Expiration time
     response = requests.post(url=url, data=payload)
     check_status, status = check_status_code(response.status_code)
     body = json.loads(response.content)
@@ -87,8 +91,10 @@ def response_data(url, payload):
 
 
 def get_url_auth_dotenv(version):
-    # Args: Version(str) : Api version
-    # Get url auth from .env file
+    # Pega dados de auth do .env
+    # Args:
+    #   Version(str) : Versão da API
+
     auth = get_data_secret(version)
     if version == "v1":
         url = auth["AUTH_URI_V1_RAIA"]
@@ -101,20 +107,21 @@ def get_url_auth_dotenv(version):
 
 
 def get_auth(payload, version):
+    # Realiza a autenticacao
     # Args:
-    # Payload: Authentication data
-    # API Version: Version API
-    # Make auth-request
+    #   Payload: Authentication data
+    #   API Version: Version API
+
     url = get_url_auth_dotenv(version)
     authentication = response_data(url, payload)
     return str(authentication)
 
 
 def unpack(list):
-    """
-    Desempacota os dados piis vindos da requisicao
-    Args = lista de dados da requisicao  (vindas do request.content)
-    """
+
+    # Desempacota os dados piis vindos da requisicao
+    # Args
+    # list:  lista de dados da requisicao  (vindas do request.content)
     lst = []
     for item in list:
         for key, value in item.items():
@@ -124,9 +131,10 @@ def unpack(list):
 
 
 async def create_dataframe(data, de_key, de_fields):
-    # Args
-    # data : dict com os dados piis vindos da SFMC
     # Cria um dataframe e preenche dados NaN como NULL
+    # Args
+    # Data : dict com os dados piis vindos da SFMC
+
     df = pd.DataFrame(data, columns=de_fields[de_key])
     df.fillna("NULL", inplace=True)
 
@@ -185,7 +193,8 @@ async def save_file_on_bucket(
 
 async def create_schema(df):
     # Cria schema para uma tabela do BQ
-    # Args = df: Dataframe pandas criado para os dados piis
+    # Args
+    #   df: Dataframe pandas criado para os dados piis
     lst = df.columns.tolist()
     schema = []
     types = {"int": "INTEGER", "float": "FLOAT", "bool": "BOOLEAN", "str": "STRING"}
@@ -234,7 +243,8 @@ async def gcs_to_bq(project, dataset_name, data_extension, schema, gcs_uri):
 async def clean_pii(dados_pii):
     """
     Para cada requisicao, pega apenas os dados da chave items vindas da request
-    Args =  dados_pii: lista de requests
+    Args:
+        dados_pii: lista de requests
     """
     lst = []
     count = 0
@@ -253,11 +263,10 @@ async def clean_pii(dados_pii):
 
 
 async def merge_pii(dp_clean):
-    """
-    Lista com dicionarios com todas as informacoes completas juntas
-    Args : Dicionario com dados piis tratados
 
-    """
+    # Lista com dicionarios com todas as informacoes completas juntas
+    # Args :
+    # dp_clean : Dicionario com dados piis tratados
 
     lst = []
     for i in dp_clean:
@@ -268,10 +277,11 @@ async def merge_pii(dp_clean):
 
 
 def extract_keys(data_extension):
-    """
-    Carrega as chaves da data extensions para formacao de nome de tabela
-    Args = data_extension nome das chaves do dicionario de data extensions
-    """
+
+    # Carrega as chaves da data extensions para formacao de nome de tabela
+    # Args:
+    # data_extension nome das chaves do dicionario de data extensions
+
     lst = []
     de = data_extension.keys()
     for i in de:
@@ -280,6 +290,9 @@ def extract_keys(data_extension):
 
 
 async def none_check_list(list):
+    # Checa se uma lista esta vazia
+    # Args:
+    # lista
     lst = []
     for val in list:
         if val != None:
@@ -287,8 +300,14 @@ async def none_check_list(list):
     return lst
 
 
-async def get_pii(session, url, token, number):  # retorna 1 pokemon
+async def get_pii(session, url, token, number):
 
+    # Realiza request assincrona para SFMC
+    # Args:
+    # session: session aiohttp
+    # url: url de acesso
+    # token : token de acesso para request sfmc
+    # number : rodada de iteracao do loop de request
     cont = 0
     headers = {"Authorization": token}
     try:
@@ -325,7 +344,7 @@ async def get_piis(
                     )
                 )
             )
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.19)
         piis_data = await asyncio.gather(*tasks)
         lst = []
         lst.append(piis_data)
@@ -334,11 +353,23 @@ async def get_piis(
 
 async def preparation(
     max_round, token, externalkey, data_extension_keys, data_extension_fields, config
-):  # task para retornar 22 x 2,5M registros
+):
+    """
+    Task assincrona para retornar 750.000 registros por rodada
+
+    Args:
+        max_round  = quantidade de rodadas
+        token = token sfmc de acesso
+        external_key = external keuy
+        data_extensions_keys
+        data_extension_fields
+        config
+    """
+
     round = 1
     start = 1
 
-    stop_steps = [8, 16, 24, 32, 40, 48, 56, 64, 72]
+    stop_steps = [6, 12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72, 78, 84, 90, 96]
     while round < max_round:
         if round in stop_steps:
             print("Time get some new token ... ")
@@ -348,7 +379,7 @@ async def preparation(
             token = get_auth(credentials, cfg_initial["version"])
 
             print("waiting 2 secs")
-            await asyncio.sleep(2)
+            await asyncio.sleep(1.5)
 
         stop = (round * 300) + 1
         print(f"Calling {round} Round")
@@ -372,14 +403,11 @@ async def preparation(
 
 if __name__ == "__main__":
     # API Version V2 uses OAuth2.0
-    # Dicionario de dados com configurações iniciais : Versão API, Bandeira
-
+    # Dicionario de dados com configurações iniciais : Versão API, Bandeira, Maximo de rodadas = total de registros / 750.000
     cfg_initial = {
         "version": "v2",
         "brand": ["raia", "drogasil"],
-        # "start_request_consume_sfmc": 1,
-        # "finish_request_consume_sfmc": 101,  # 23541
-        "round_max": 59,
+        "round_max": 96,
     }
 
     # Dicionario com as data extensions e external keys
@@ -389,7 +417,7 @@ if __name__ == "__main__":
         "MCV_CAD_CLIENTE": "4B16816C-B017-418C-9378-C4B0A28B0ED3",
         "MCV_DNA": "C9DE68B4-E324-496C-B8A1-A7BC384720B3",
     }
-
+    # Dicionario de dados com o nome das data extensions e campos da tabela para gerar:  Schema, Nome da Tabela e Nome do csv
     data_extension_fields = {
         "MCV_LGPD_RAIA": [
             "golden_id",
@@ -397,6 +425,10 @@ if __name__ == "__main__":
             "bkl_lgpd_celular",
             "bkl_lgpd_push",
             "bkl_lgpd_email",
+            "bkl_lgpd_pbm",
+            "bkl_lgpd_des_ben_farm",
+            "bkl_lgpd_com_mkt",
+            "fl_lgpd_indefinido",
         ],
         "MCV_LGPD_DROGASIL": [
             "golden_id",
@@ -464,8 +496,8 @@ if __name__ == "__main__":
             # cfg_initial["start_request_consume_sfmc"],
             cfg_initial["round_max"],
             auth,
-            data_extension["MCV_DNA"],
-            data_extension_keys[3],
+            data_extension["MCV_LGPD_DROGASIL"],
+            data_extension_keys[1],
             data_extension_fields,
             config,
         )

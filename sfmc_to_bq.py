@@ -18,10 +18,10 @@ def get_data_secret(version):
     # Version : Versão da api do SFMC = atual v2
     if version == "v2":
         credentals = {
-            "AUTH_URI_V2_RAIA": "",
-            "REST_URI_V2_RAIA": "",
-            "CLIENT_ID_V2_RAIA": "",
-            "CLIENT_SECRET_V2_RAIA": "",
+            "AUTH_URI_V2_RAIA": "https://mcjss9736km3nd134n6cv8-hcfy0.auth.marketingcloudapis.com/v2/token",
+            "REST_URI_V2_RAIA": "https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/",
+            "CLIENT_ID_V2_RAIA": "o09bav0efhzkub1fjtngg2kf",
+            "CLIENT_SECRET_V2_RAIA": "QiWxOZR0fPB3yeJUbBQMxE6G",
         }
         return credentals
     else:
@@ -219,7 +219,8 @@ async def gcs_to_bq(project, dataset_name, data_extension, schema, gcs_uri):
     print("Inicializando Client .. ")
     bq_client = bigquery.Client(project)
     dataset_ref = bq_client.get_dataset(project + "." + dataset_name)
-    table_name = f"{data_extension}_{datetime.today().strftime('%Y-%m-%d')}"
+    # table_name = f"{data_extension}_{datetime.today().strftime('%Y-%m-%d')}"
+    table_name = "GOLDEN_ID_HASH_2021-10-21"
     print(f"Reporting  \n {dataset_name} => {table_name}  \n  {schema} \n {gcs_uri}")
     print("configurando job ... ")
     job_config = bigquery.LoadJobConfig(
@@ -327,7 +328,7 @@ async def get_pii(session, url, token, number):
 
 async def get_piis(
     start, stop, token, externalkey
-):  # task para retornar 2,5M de registros
+):  # task para retornar 750k de registros
     tasks = []
     async with aiohttp.ClientSession() as session:
         print(f"Collecting 750k of Piis data ")
@@ -344,15 +345,22 @@ async def get_piis(
                     )
                 )
             )
-            await asyncio.sleep(0.19)
+            await asyncio.sleep(0.27)
         piis_data = await asyncio.gather(*tasks)
         lst = []
         lst.append(piis_data)
     return lst
 
 
+
+
 async def preparation(
-    max_round, token, externalkey, data_extension_keys, data_extension_fields, config
+    max_round,
+    token,
+    externalkey,
+    data_extension_keys,
+    data_extension_fields,
+    config,
 ):
     """
     Task assincrona para retornar 750.000 registros por rodada
@@ -369,7 +377,26 @@ async def preparation(
     round = 1
     start = 1
 
-    stop_steps = [6, 12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72, 78, 84, 90, 96]
+    stop_steps = [
+        6,
+        12,
+        18,
+        24,
+        30,
+        36,
+        42,
+        48,
+        54,
+        60,
+        66,
+        72,
+        78,
+        84,
+        90,
+        96,
+        102,
+        108,
+    ]
     while round < max_round:
         if round in stop_steps:
             print("Time get some new token ... ")
@@ -378,17 +405,17 @@ async def preparation(
             # Autenticação na SFMC API
             token = get_auth(credentials, cfg_initial["version"])
 
-            print("waiting 2 secs")
+            print("waiting 1.5 secs")
             await asyncio.sleep(1.5)
-
         stop = (round * 300) + 1
         print(f"Calling {round} Round")
         res = await get_piis(start, stop, token, externalkey)
         none_check = await none_check_list(res)
         dp_clean = await clean_pii(none_check)
         merged_data = await merge_pii(dp_clean)
+        # filtered_data = await filter_data(query_data, merged_data)
         df = await create_dataframe(
-            merged_data, data_extension_keys, data_extension_fields
+            dp_clean, data_extension_keys, data_extension_fields
         )
         print(df)
         uri = await csv_to_gcs(df, data_extension_keys, config, round)
@@ -407,7 +434,7 @@ if __name__ == "__main__":
     cfg_initial = {
         "version": "v2",
         "brand": ["raia", "drogasil"],
-        "round_max": 96,
+        "round_max": 107,
     }
 
     # Dicionario com as data extensions e external keys
@@ -416,6 +443,7 @@ if __name__ == "__main__":
         "MCV_LGPD_DROGASIL": "C1E4F6ED-DFDC-4E8A-AB57-A94FE2F2878C",
         "MCV_CAD_CLIENTE": "4B16816C-B017-418C-9378-C4B0A28B0ED3",
         "MCV_DNA": "C9DE68B4-E324-496C-B8A1-A7BC384720B3",
+        "GOLDEN_ID_HASH": "7551FEAD-EB0E-4EB2-803E-2EF1345C306C",
     }
     # Dicionario de dados com o nome das data extensions e campos da tabela para gerar:  Schema, Nome da Tabela e Nome do csv
     data_extension_fields = {
@@ -472,6 +500,7 @@ if __name__ == "__main__":
             "dna_cronico",
             "perfil_beleza",
         ],
+        "GOLDEN_ID_HASH": ["golden_id", "hash_id"],
     }
     # Dicionario de configuração para inserir arquivos CSV no GCS
     config = {
@@ -493,11 +522,10 @@ if __name__ == "__main__":
     )  # Police para Windows
     dados_piis = run(
         preparation(
-            # cfg_initial["start_request_consume_sfmc"],
             cfg_initial["round_max"],
             auth,
-            data_extension["MCV_LGPD_DROGASIL"],
-            data_extension_keys[1],
+            data_extension["GOLDEN_ID_HASH"],
+            data_extension_keys[4],
             data_extension_fields,
             config,
         )

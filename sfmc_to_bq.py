@@ -20,8 +20,8 @@ def get_data_secret(version):
         credentals = {
             "AUTH_URI_V2_RAIA": "https://mcjss9736km3nd134n6cv8-hcfy0.auth.marketingcloudapis.com/v2/token",
             "REST_URI_V2_RAIA": "https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/",
-            "CLIENT_ID_V2_RAIA": "o09bav0efhzkub1fjtngg2kf",
-            "CLIENT_SECRET_V2_RAIA": "QiWxOZR0fPB3yeJUbBQMxE6G",
+            "CLIENT_ID_V2_RAIA": "",
+            "CLIENT_SECRET_V2_RAIA": "",
         }
         return credentals
     else:

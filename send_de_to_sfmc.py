@@ -162,7 +162,7 @@ def send_de_to_sfmc(payload, d):
 
     """
     print("Enviando dados para SFMC")
-    url = "https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/data/v1/async/dataextensions/key:307DBAE2-93D3-4CC9-BB5E-BB01F76028E2/rows"
+    url = "https://mcjss9736km3nd134n6cv8-hcfy0.rest.marketingcloudapis.com/data/v1/async/dataextensions/key/rows"
     headers = {"Authorization": payload}
     to_json = json.dumps(d)
     response = requests.post(url=url, data=to_json, headers=headers)
